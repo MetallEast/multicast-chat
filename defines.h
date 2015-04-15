@@ -19,31 +19,37 @@
 #include <stdio.h>
 #include <signal.h>
 typedef int SOCKET;
+typedef unsigned long DWORD;
 #endif
 
 #pragma comment(lib, "ws2_32.lib")
 using namespace std;
 
-
 #define PORT		5000
 #define GROUP		"239.0.0.1"
 #define MSGSIZE		256
+#define STDSIZE		17
+
+// Message types
+#define JOIN		'0'
+#define RESET		'1'
+#define LEFT		'2'
+#define GETIP		'3'
+#define MESSAGE		'4'
+#define WHISPER		'5'
 
 bool CLOSE_CHAT = false;
-
-typedef enum { JOIN, ADD, MESSAGE, LEFT } messageType;
+char resetMessage[STDSIZE];
 
 struct user 
 {
-	char ip[16];
 	char name[16];
+	DWORD timer;
 
-public:
-	
+public:	
 	bool Compare(user other)
 	{
-		if (strcmp(other.ip, ip) == 0	&&
-			strcmp(other.name, name) == 0)
+		if (strcmp(other.name, name) == 0)
 			return true;
 		else return false;
 	}
