@@ -25,21 +25,6 @@ void End() {
 #endif
 }
 
-in_addr FindNetInterface()
-{
-	int nAdapter; 
-	sockaddr_in address;
-	hostent *sh = gethostbyname(0);  
-    
-	for (nAdapter = 0; sh->h_addr_list[nAdapter] != 0; ++nAdapter);
-    if (nAdapter <= 0) 
-		Error("search for network interfaces");
-    memcpy(&address.sin_addr, sh->h_addr_list[0], sh->h_length);
-	cout << "Used Interface: " << inet_ntoa(address.sin_addr) << ":" << address.sin_port << "\r\n\r\n";
-
-	return address.sin_addr;
-}
-
 void CloseSocket(SOCKET socket)
 {
 	shutdown(socket, 2);
@@ -102,12 +87,27 @@ void ParseMessage(string message)
 
 	if (type == JOIN || type == LEFT || type == RESET)
 		strcpy(us.name, message.substr(1, message.length()-1).c_str());
+	else if (type == WHISPER)
+	{
+		if (strcmp(message.substr(1, strlen(me.name)).c_str(), me.name) == 0)					// If addressing to me
+		{
+			pos = message.find_first_of(':');
+			string sender = message.substr(1 + strlen(me.name), pos - strlen(me.name) - 1);		// Sender nickname
+			if (strcmp(me.name, sender.c_str()) == 0)											// If I send whisper message to myself
+				cout << "I sent message to myself\r\n";
+			else																				// Somebody send whisper message to me
+				cout << "[whisper] " << sender << message.substr(pos, message.length()) << "\r\n"; 
+		}
+		return;
+	}
 	else
 	{
 		type = MESSAGE;		
 		pos = message.find(':');
 		strcpy(us.name, message.substr(0, pos - 1).c_str());		
 	}
+
+
 
 	if (strcmp(us.name, me.name) == 0)
 	{
@@ -160,8 +160,32 @@ void ParseMessage(string message)
 			default  :	break;
 		}
 }
-int  ParseRequest(char *message)		// 0 - not send		// 1 - send		// 2 - exit
+int  ParseRequest(char *message)								// 0 - not send		// 1 - send		// 2 - exit
 {
+	if (message[mesHeaderSize] == '.')
+	{
+		bool exist = false;
+		string nick = string(message + mesHeaderSize);
+		int spacePos = nick.find_first_of(' ');
+		
+		if (spacePos == -1)		// No space
+			return 0;
+		nick = nick.substr(1, spacePos - 1);
+	
+		for(int i = 0; i < users.capacity(); i++)
+			if (strcmp(users[i].name, nick.c_str()) == 0) 
+				exist = true;
+		
+		if (exist)
+		{
+			string data = message + mesHeaderSize + spacePos;
+			sprintf(message, "%c%s%s: %s", WHISPER, nick.c_str(), me.name, data.c_str());
+			return 1;
+		}
+		else 
+			return 0;			// User doesn't exist
+	}
+
 	if (strcmp(message + mesHeaderSize, "/online") == 0)
 	{
 		cout << "\r\n\r\nUsers Online";
@@ -202,6 +226,10 @@ void CheckTimers()
 		if (sendto(sockSend, resetMessage, STDSIZE, 0, (sockaddr*)&multiAddress, sizeof(multiAddress)) == 0)
 			Error("sending");
 }
+void UpdateOnline()
+{
+
+}
 
 DWORD WINAPI SendThread(LPVOID NaN)
 {
@@ -216,7 +244,7 @@ DWORD WINAPI SendThread(LPVOID NaN)
 	{
 		cout << "\r\n";
 		gets(message + mesHeaderSize);
-		
+
 		if (ParseRequest(message) == 0)	continue;
 		if (CLOSE_CHAT == true)	break;
 		if (sendto(sockSend, message, MSGSIZE, 0, (sockaddr*)&multiAddress, sizeof(multiAddress)) == 0)
@@ -239,12 +267,26 @@ DWORD WINAPI RecvThread(LPVOID NaN)
 		if (CLOSE_CHAT)	break;
 		ParseMessage(string(message));
 		CheckTimers();
+		UpdateOnline();
 	}
 
 	delete message;
 	return 0;
 }
+in_addr FindNetInterface()
+{
+	int nAdapter; 
+	sockaddr_in address;
+	hostent *sh = gethostbyname(0);  
+    
+	for (nAdapter = 0; sh->h_addr_list[nAdapter] != 0; ++nAdapter);
+    if (nAdapter <= 0) 
+		Error("search for network interfaces");
+    memcpy(&address.sin_addr, sh->h_addr_list[0], sh->h_length);
+	cout << "Used Interface: " << inet_ntoa(address.sin_addr) << ":" << address.sin_port << "\r\n\r\n";
 
+	return address.sin_addr;
+}
 
 int main() 
 {
@@ -273,6 +315,5 @@ int main()
 	CloseHandle(hThreads[1]);
 
 	End();
-    
     return 0;
 }
