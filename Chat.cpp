@@ -70,10 +70,10 @@ void JoinToChat()
 	cin  >> me.name;
 	fflush(stdin);
 
-	sprintf(resetMessage, "%c%s", RESET, me.name);
-	sprintf(joinMessage,  "%c%s", JOIN,  me.name);															// [JOIN][NAME]
+	sprintf(resetMessage, "%c%s",   RESET, me.name);
+	sprintf(joinMessage,  "%c%s%s", JOIN,  me.name, me.ip);															// [JOIN][NAME]
 	
-	if (sendto(sockSend, joinMessage, STDSIZE, 0, (sockaddr*)&multiAddress, sizeof(multiAddress)) == 0)
+	if (sendto(sockSend, joinMessage, STDSIZE + 15, 0, (sockaddr*)&multiAddress, sizeof(multiAddress)) == 0)
 		Error("sending");
 	
 	delete joinMessage;
@@ -85,18 +85,30 @@ void ParseMessage(string message)
 	char type = message[0];
 	user us;
 
-	if (type == JOIN || type == LEFT || type == RESET)
+	if (type == LEFT || type == RESET)
 		strcpy(us.name, message.substr(1, message.length()-1).c_str());
+	else if (type == JOIN)
+	{
+		for(int i = 1; i < message.length(); i++)
+			if (isdigit(message[i]) != 0)
+			{
+				pos = i - 1;
+				break;
+			}
+
+		strcpy(us.name, message.substr(1, pos).c_str());
+		strcpy(us.ip,   message.substr(pos + 1, message.length()).c_str());
+	}
 	else if (type == WHISPER)
 	{
 		if (strcmp(message.substr(1, strlen(me.name)).c_str(), me.name) == 0)					// If addressing to me
 		{
 			pos = message.find_first_of(':');
 			string sender = message.substr(1 + strlen(me.name), pos - strlen(me.name) - 1);		// Sender nickname
-			if (strcmp(me.name, sender.c_str()) == 0)											// If I send whisper message to myself
-				cout << "I sent message to myself\r\n";
-			else																				// Somebody send whisper message to me
-				cout << "[whisper] " << sender << message.substr(pos, message.length()) << "\r\n"; 
+			if (strcmp(me.name, sender.c_str()) == 0)											// If I send private message to myself
+				printf("I sent message to myself\r\n");
+			else																				// Somebody send private message to me
+				printf("[PM from %s] %s\r\n", sender.c_str(), message.substr(pos + 2, message.length()).c_str()); 
 		}
 		return;
 	}
@@ -106,8 +118,6 @@ void ParseMessage(string message)
 		pos = message.find(':');
 		strcpy(us.name, message.substr(0, pos - 1).c_str());		
 	}
-
-
 
 	if (strcmp(us.name, me.name) == 0)
 	{
@@ -120,12 +130,12 @@ void ParseMessage(string message)
 				break;
 			case MESSAGE:
 				cout << message << "\r\n";
-				for(int i=0; i<users.capacity(); i++)
+				for(int i=0; i<users.size(); i++)
 					if (users[i].Compare(us) == true)
 						users[i].timer = GetTickCount();
 				break;
 			case RESET:
-				for(int i=0; i<users.capacity(); i++)
+				for(int i=0; i<users.size(); i++)
 					if (users[i].Compare(us) == true)
 						users[i].timer = GetTickCount();
 				break;
@@ -141,18 +151,18 @@ void ParseMessage(string message)
 				cout << us.name << " have joined to chat" << "\r\n";
 				break;
 			case MESSAGE:
-				for(int i=0; i<users.capacity(); i++)
+				for(int i=0; i<users.size(); i++)
 					if (users[i].Compare(us) == true)
 						users[i].timer = GetTickCount();
 				cout << message << "\r\n";
 				break;
 			case RESET:
-				for(int i=0; i<users.capacity(); i++)
+				for(int i=0; i<users.size(); i++)
 					if (users[i].Compare(us) == true)
 						users[i].timer = GetTickCount();
 				break;
 			case LEFT:
-				for(int i=0; i<users.capacity(); i++)
+				for(int i=0; i<users.size(); i++)
 					if (users[i].Compare(us) == true)
 						users.erase(users.begin() + i);
 				cout << us.name << " left the chat\r\n";
@@ -172,26 +182,27 @@ int  ParseRequest(char *message)								// 0 - not send		// 1 - send		// 2 - exi
 			return 0;
 		nick = nick.substr(1, spacePos - 1);
 	
-		for(int i = 0; i < users.capacity(); i++)
+		for(int i = 0; i < users.size(); i++)
 			if (strcmp(users[i].name, nick.c_str()) == 0) 
 				exist = true;
 		
 		if (exist)
 		{
-			string data = message + mesHeaderSize + spacePos;
+			string data = message + mesHeaderSize + spacePos + 1;
 			sprintf(message, "%c%s%s: %s", WHISPER, nick.c_str(), me.name, data.c_str());
+			printf("[PM to %s] %s\r\n", nick.c_str(), data.c_str());
 			return 1;
 		}
 		else 
 			return 0;			// User doesn't exist
 	}
 
-	if (strcmp(message + mesHeaderSize, "/online") == 0)
+	if (strcmp(message + mesHeaderSize, "/ips") == 0)
 	{
-		cout << "\r\n\r\nUsers Online";
-		for(int i=0; i<users.capacity(); i++)
-			cout << "\r\n" << users[i].name;
-		cout << "\r\n\r\n";
+		printf("\r\nIP table\r\n\r\n");
+		for(int i = 0; i < users.size(); i++)
+			printf("%s\t%s\r\n", users[i].name, users[i].ip);
+		printf("\r\n");
 		return 0;
 	}
 
@@ -206,6 +217,15 @@ int  ParseRequest(char *message)								// 0 - not send		// 1 - send		// 2 - exi
 		return 2;
 	}
 
+	if (strcmp(message + mesHeaderSize, "/online") == 0)
+	{
+		cout << "\r\n\r\nUsers Online";
+		for(int i=0; i<users.size(); i++)
+			cout << "\r\n" << users[i].name;
+		cout << "\r\n\r\n";
+		return 0;
+	}
+
 	return 1;
 }
 void CheckTimers()
@@ -213,7 +233,7 @@ void CheckTimers()
 	user us;
 	DWORD currentTime = GetTickCount(); 
 
-	for(int i = 1; i < users.capacity(); i++)
+	for(int i = 1; i < users.size(); i++)
 	{
 		if (currentTime - users[i].timer > 600000)			// 10 minutes (minimum four RESET or one LEFT lost)
 		{
@@ -235,10 +255,8 @@ DWORD WINAPI SendThread(LPVOID NaN)
 {
 	char *message = new char[MSGSIZE];
 
-	CreateSendSocket();
-	JoinToChat();
 	sprintf(message, "%s: ", me.name);		
-	mesHeaderSize = strlen(message);	// 18
+	mesHeaderSize = strlen(message);	
 
 	while(true)
 	{
@@ -257,8 +275,6 @@ DWORD WINAPI SendThread(LPVOID NaN)
 DWORD WINAPI RecvThread(LPVOID NaN)
 {
 	char *message = new char[MSGSIZE];
-
-	CreateRecvSocket();
 
 	while(true)
 	{
@@ -284,6 +300,7 @@ in_addr FindNetInterface()
 		Error("search for network interfaces");
     memcpy(&address.sin_addr, sh->h_addr_list[0], sh->h_length);
 	cout << "Used Interface: " << inet_ntoa(address.sin_addr) << ":" << address.sin_port << "\r\n\r\n";
+	sprintf(me.ip, "%s", inet_ntoa(address.sin_addr));
 
 	return address.sin_addr;
 }
@@ -305,6 +322,10 @@ int main()
 
 	mreq.imr_multiaddr.s_addr = inet_addr(GROUP);
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+
+	CreateSendSocket();
+	CreateRecvSocket();
+	JoinToChat();
 
 	hThreads[0] = CreateThread(NULL, 0, SendThread, 0, 0, NULL);
 	hThreads[1] = CreateThread(NULL, 0, RecvThread, 0, 0, NULL);

@@ -20,6 +20,7 @@
 #include <signal.h>
 typedef int SOCKET;
 typedef unsigned long DWORD;
+typedef __stdcall WINAPI; 
 #endif
 
 #pragma comment(lib, "ws2_32.lib")
@@ -34,7 +35,6 @@ using namespace std;
 #define JOIN		'0'
 #define RESET		'1'
 #define LEFT		'2'
-#define GETIP		'3'
 #define MESSAGE		'4'
 #define WHISPER		'5'
 
@@ -44,8 +44,8 @@ char resetMessage[STDSIZE];
 struct user 
 {
 	char name[16];
+	char ip[15];
 	DWORD timer;
-
 public:	
 	bool Compare(user other)
 	{
@@ -54,7 +54,6 @@ public:
 		else return false;
 	}
 } me;
-
 
 vector<user> users;
 
