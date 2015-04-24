@@ -19,8 +19,6 @@
 #include <stdio.h>
 #include <signal.h>
 typedef int SOCKET;
-typedef unsigned long DWORD;
-typedef __stdcall WINAPI; 
 #endif
 
 #pragma comment(lib, "ws2_32.lib")
@@ -45,7 +43,7 @@ struct user
 {
 	char name[16];
 	char ip[15];
-	DWORD timer;
+	unsigned long timer;
 public:	
 	bool Compare(user other)
 	{
@@ -67,4 +65,4 @@ sockaddr_in localAddress;
 sockaddr_in multiAddress;
 ip_mreq mreq;
 
-HANDLE hThreads[2];
+void* hThreads[2];
