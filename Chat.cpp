@@ -62,14 +62,51 @@ void CreateRecvSocket()
 	setsockopt(sockRecv, IPPROTO_IP, IP_ADD_MEMBERSHIP, mreq, sizeof(mreq));
 	#endif	
 }
+void InputNickname()
+{
+	string name;
+	while(true)
+	{
+		bool digitCheck = true;
+		cout << "Enter nickname: ";
+		cin >> name;
+		fflush(stdin);
+		
+		if (name.length() > 16 || name.empty())
+		{
+			cout << "Nickname should be in the range of 1 to 16 characters\r\n";
+			continue;
+		}
+
+		if (name.find_first_of(' ') != string::npos ||
+			name.find_first_of(':') != string::npos ||
+			name.find_first_of('.') != string::npos)
+		{
+			cout << "Nickname must not contain dots, colons and spaces\r\n";
+			continue;
+		}
+		
+		for(int i = 0; i < name.length(); i++)
+		{
+			if (isdigit(name[i]) != 0)
+			{
+				cout << "Nickname must not contain digits\r\n";
+				digitCheck = false;
+				break;
+			}
+		}
+
+		if (!digitCheck)
+			continue;
+		else break;
+	}
+	strcpy(me.name, name.c_str());
+}
 void JoinToChat()
 {
 	char *joinMessage = new char[STDSIZE];
 	
-	cout << "Enter nickname: ";
-	cin  >> me.name;
-	fflush(stdin);
-
+	InputNickname();
 	sprintf(resetMessage, "%c%s",   RESET, me.name);
 	sprintf(joinMessage,  "%c%s%s", JOIN,  me.name, me.ip);															// [JOIN][NAME]
 	
@@ -148,7 +185,7 @@ void ParseMessage(string message)
 			case JOIN: 
 				us.timer = GetTickCount();
 				users.push_back(us);
-				cout << us.name << " have joined to chat" << "\r\n";
+				cout << us.name << " have joined to chat\r\n";
 				break;
 			case MESSAGE:
 				for(int i=0; i<users.size(); i++)
@@ -197,9 +234,18 @@ int  ParseRequest(char *message)								// 0 - not send		// 1 - send		// 2 - exi
 			return 0;			// User doesn't exist
 	}
 
+	if (strcmp(message + mesHeaderSize, "/help") == 0)
+	{
+		printf("\r\nPrivate Message		.[Recipient] [Message]");
+		printf("\r\nUsers Online		/online");
+		printf("\r\nIP Table		/ips");
+		printf("\r\nExit			/exit");
+		return 0;
+	}
+
 	if (strcmp(message + mesHeaderSize, "/ips") == 0)
 	{
-		printf("\r\nIP table\r\n\r\n");
+		printf("IP table\r\n--------------\r\n");
 		for(int i = 0; i < users.size(); i++)
 			printf("%s\t%s\r\n", users[i].name, users[i].ip);
 		printf("\r\n");
@@ -219,10 +265,10 @@ int  ParseRequest(char *message)								// 0 - not send		// 1 - send		// 2 - exi
 
 	if (strcmp(message + mesHeaderSize, "/online") == 0)
 	{
-		cout << "\r\n\r\nUsers Online";
+		printf("\r\n\r\nUsers Online");
 		for(int i=0; i<users.size(); i++)
 			cout << "\r\n" << users[i].name;
-		cout << "\r\n\r\n";
+		printf("\r\n\r\n");
 		return 0;
 	}
 
@@ -246,12 +292,8 @@ void CheckTimers()
 		if (sendto(sockSend, resetMessage, STDSIZE, 0, (sockaddr*)&multiAddress, sizeof(multiAddress)) == 0)
 			Error("sending");
 }
-void UpdateOnline()
-{
 
-}
-
-DWORD WINAPI SendThread(LPVOID NaN)
+unsigned long __stdcall SendThread(LPVOID NaN)
 {
 	char *message = new char[MSGSIZE];
 
@@ -272,7 +314,7 @@ DWORD WINAPI SendThread(LPVOID NaN)
 	delete message;
 	return 0;
 }
-DWORD WINAPI RecvThread(LPVOID NaN)
+unsigned long __stdcall RecvThread(LPVOID NaN)
 {
 	char *message = new char[MSGSIZE];
 
@@ -283,7 +325,6 @@ DWORD WINAPI RecvThread(LPVOID NaN)
 		if (CLOSE_CHAT)	break;
 		ParseMessage(string(message));
 		CheckTimers();
-		UpdateOnline();
 	}
 
 	delete message;
@@ -304,6 +345,7 @@ in_addr FindNetInterface()
 
 	return address.sin_addr;
 }
+
 
 int main() 
 {
