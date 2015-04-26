@@ -34,7 +34,10 @@ using namespace std;
 #define RESET		'1'
 #define LEFT		'2'
 #define MESSAGE		'4'
-#define WHISPER		'5'
+
+// MemberShip options
+#define ADD			0
+#define DROP		1
 
 bool CLOSE_CHAT = false;
 char resetMessage[STDSIZE];

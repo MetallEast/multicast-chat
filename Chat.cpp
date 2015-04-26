@@ -25,8 +25,29 @@ void End() {
 #endif
 }
 
+void Membership(int operationType)
+{
+	if (operationType == ADD)
+	{
+		#if defined(_WIN32) || defined(_WIN64)
+		setsockopt(sockRecv, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char*)&mreq, sizeof(mreq));
+		#else
+		setsockopt(sockRecv, IPPROTO_IP, IP_ADD_MEMBERSHIP, mreq, sizeof(mreq));
+		#endif	
+	}
+
+	if (operationType == DROP)
+	{
+		#if defined(_WIN32) || defined(_WIN64)
+		setsockopt(sockRecv, IPPROTO_IP, IP_DROP_MEMBERSHIP, (const char*)&mreq, sizeof(mreq));
+		#else
+		setsockopt(sockRecv, IPPROTO_IP, IP_DROP_MEMBERSHIP, mreq, sizeof(mreq));
+		#endif	
+	}
+}
 void CloseSocket(SOCKET socket)
 {
+	Membership(DROP);
 	shutdown(socket, 2);
 #if defined(linux) || defined(__linux)
 	close(socket);
@@ -55,12 +76,7 @@ void CreateRecvSocket()
 		Error("receiving socket creation");
 	Setsockopt(sockRecv, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 	bind(sockRecv, (sockaddr*)&localAddress, sizeof(localAddress));
-
-	#if defined(_WIN32) || defined(_WIN64)
-	setsockopt(sockRecv, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char*)&mreq, sizeof(mreq));
-	#else
-	setsockopt(sockRecv, IPPROTO_IP, IP_ADD_MEMBERSHIP, mreq, sizeof(mreq));
-	#endif	
+	Membership(ADD);
 }
 void InputNickname()
 {
@@ -79,10 +95,9 @@ void InputNickname()
 		}
 
 		if (name.find_first_of(' ') != string::npos ||
-			name.find_first_of(':') != string::npos ||
-			name.find_first_of('.') != string::npos)
+			name.find_first_of(':') != string::npos)
 		{
-			cout << "Nickname must not contain dots, colons and spaces\r\n";
+			cout << "Nickname must not contain colons and spaces\r\n";
 			continue;
 		}
 		
@@ -135,19 +150,6 @@ void ParseMessage(string message)
 
 		strcpy(us.name, message.substr(1, pos).c_str());
 		strcpy(us.ip,   message.substr(pos + 1, message.length()).c_str());
-	}
-	else if (type == WHISPER)
-	{
-		if (strcmp(message.substr(1, strlen(me.name)).c_str(), me.name) == 0)					// If addressing to me
-		{
-			pos = message.find_first_of(':');
-			string sender = message.substr(1 + strlen(me.name), pos - strlen(me.name) - 1);		// Sender nickname
-			if (strcmp(me.name, sender.c_str()) == 0)											// If I send private message to myself
-				printf("I sent message to myself\r\n");
-			else																				// Somebody send private message to me
-				printf("[PM from %s] %s\r\n", sender.c_str(), message.substr(pos + 2, message.length()).c_str()); 
-		}
-		return;
 	}
 	else
 	{
@@ -209,34 +211,8 @@ void ParseMessage(string message)
 }
 int  ParseRequest(char *message)								// 0 - not send		// 1 - send		// 2 - exit
 {
-	if (message[mesHeaderSize] == '.')
-	{
-		bool exist = false;
-		string nick = string(message + mesHeaderSize);
-		int spacePos = nick.find_first_of(' ');
-		
-		if (spacePos == -1)		// No space
-			return 0;
-		nick = nick.substr(1, spacePos - 1);
-	
-		for(int i = 0; i < users.size(); i++)
-			if (strcmp(users[i].name, nick.c_str()) == 0) 
-				exist = true;
-		
-		if (exist)
-		{
-			string data = message + mesHeaderSize + spacePos + 1;
-			sprintf(message, "%c%s%s: %s", WHISPER, nick.c_str(), me.name, data.c_str());
-			printf("[PM to %s] %s\r\n", nick.c_str(), data.c_str());
-			return 1;
-		}
-		else 
-			return 0;			// User doesn't exist
-	}
-
 	if (strcmp(message + mesHeaderSize, "/help") == 0)
 	{
-		printf("\r\nPrivate Message		.[Recipient] [Message]");
 		printf("\r\nUsers Online		/online");
 		printf("\r\nIP Table		/ips");
 		printf("\r\nExit			/exit");
@@ -371,11 +347,12 @@ int main()
 
 	hThreads[0] = CreateThread(NULL, 0, SendThread, 0, 0, NULL);
 	hThreads[1] = CreateThread(NULL, 0, RecvThread, 0, 0, NULL);
-
 	WaitForMultipleObjects(2, hThreads, TRUE, INFINITE);
 
 	CloseHandle(hThreads[0]);
 	CloseHandle(hThreads[1]);
+	CloseSocket(sockSend);
+	CloseSocket(sockRecv);
 
 	End();
     return 0;
